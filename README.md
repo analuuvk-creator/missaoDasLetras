@@ -28,7 +28,7 @@ Missao-das-Letras/
 
 #### Clonar projeto
 ```
-git clone https://github.com/SEU-USUARIO/Missao-das-Letras.git
+git clone https://github.com/analuuvk-creator/missaoDasLetras.git
 ```
 ```
 cd Missao-das-Letras
