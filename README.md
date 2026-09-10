@@ -24,6 +24,7 @@ Missao-das-Letras/
 ├── vite.config.ts
 ├── index.html
 └── README.md
+```
 
 #### Clonar projeto
 ```
