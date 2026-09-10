@@ -1,0 +1,10 @@
+{
+  "description": "This app offers users a streamlined platform to manage tasks and projects efficiently, enhancing productivity and collaboration for teams and individuals.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
