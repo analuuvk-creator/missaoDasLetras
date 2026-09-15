@@ -1,0 +1,15 @@
+TECNOLOGIAS UTILIZADAS
+
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- Node.js
+- Express
+ 
+As tecnologias acima são as utilizadas pelo Figma, exceto:
+
+- Express: framework para Node.js, usada para criar servidores web, aplicativos e APIs de forma rápida e simples. 
+Ele é o padrão de mercado para Node.js, o que significa que quase qualquer problema encontrado pode ser facilmente resolvido quando pesquisado, pois outros usuários já os resolveram.
+
+ 
