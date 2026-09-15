@@ -57,6 +57,9 @@ ipconfig
 http://10.137.11.203:8443
 ```
 
-
-
+#### Integrantes
+*Alicia Aguiar;
+*Ana Luiza Vieira;
+*Gabriela Barros Lemes;
+*Maria Eduarda Barbaresco Carrasco.
 
