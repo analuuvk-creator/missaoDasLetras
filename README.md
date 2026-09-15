@@ -52,6 +52,11 @@ npm run dev
 ipconfig
 ```
 
+#### Acessar no computador local
+```
+http://localhost:8443
+```
+
 #### Acessar pelo outro computador
 ```
 http://10.137.11.203:8443
