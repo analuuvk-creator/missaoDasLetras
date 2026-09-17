@@ -2374,7 +2374,12 @@ useEffect(() => {
 
     const data = await response.json();
 
-    setStudents((prev) => [...prev, data.student]);
+    if (!data.student) {
+  console.error("Servidor não devolveu o aluno:", data);
+  return;
+}
+
+setStudents((prev) => [...prev, data.student]);
 
     console.log("Aluno cadastrado:", data.student);
   } catch (error) {
