@@ -2421,25 +2421,20 @@ export default function App() {
       return;
     }
 
-    fetch(`${getStudentsApiUrl()}/add`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(newStudent),
-    }).then(async (response) => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (Array.isArray(data.students)) {
-        serverHasStudents.current = true;
-        setStudents(data.students);
-      }
-    }).catch((error) => {
-      console.error("Não foi possível cadastrar o aluno no servidor compartilhado:", error);
-      window.alert("O aluno apareceu neste computador, mas não foi possível sincronizar com os outros. Verifique o servidor.");
-    }).finally(() => {
-      pendingStudentNames.current.delete(name);
-    });
-  };
+    const data = await response.json();
+
+    if (!data.student) {
+  console.error("Servidor não devolveu o aluno:", data);
+  return;
+}
+
+setStudents((prev) => [...prev, data.student]);
+
+    console.log("Aluno cadastrado:", data.student);
+  } catch (error) {
+    console.error("Erro ao cadastrar aluno:", error);
+  }
+};
 
   const handleDeleteStudent = async (studentId: number) => {
     const student = students.find((s) => s.id === studentId);
