@@ -1752,7 +1752,8 @@ function NotificationsPanel({ notifications, onDismiss, onDismissAll, onPromote 
   );
 }
 
-const STUDENT_EMOJIS = ["🦋","🐯","🐸","🦁","🦄","🚀","🐱","🐶","🐨","🐵","🐧","🦊","🐢","🐝","🌟","🐙"];
+const STUDENT_EMOJIS = ["🦋","🐯","🐸","🦁","🦄","🚀","🐱","🐶","🐨","🐵","🐧","🦊","🐢","🐝","🌟","🐙", "🐺", "🦒", "🐷", "🐮",
+  "🦝", "🐭", "🐗", "🐹", "🐰", "🐻", "🐼", "🦉", "🐞", "🦩", "🦜", "🦑"];
 
 function AddStudentForm({ existingNames, onAdd, onCancel }: {
   existingNames: string[]; onAdd: (name: string, emoji: string) => void; onCancel: () => void;
