@@ -5,8 +5,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const app = express();
+const PORT = 3001;
+const teacherUsername = process.env.TEACHER_USERNAME ?? "professor";
+const teacherPassword = process.env.TEACHER_PASSWORD ?? "missao2026";
+const teacherSessions = new Set();
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 const PORT = 3001;
