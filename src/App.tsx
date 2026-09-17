@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // TYPES
 // ════════════════════════════════════════════════════════════════
 
-type AppView = "avatar" | "area-select" | "sondagem-hub" | "sondagem" | "sondagem-result" | "game" | "feedback" | "teacher" | "profile" | "alphabet";
+type AppView = "avatar" | "area-select" | "sondagem-hub" | "sondagem" | "sondagem-result" | "game" | "feedback" | "teacher-login" | "teacher" | "profile" | "alphabet";
 type Area = "literacy" | "math";
 type GamePhase = "playing" | "wrong1" | "revealed";
 
@@ -1804,9 +1804,45 @@ function AddStudentForm({ existingNames, onAdd, onCancel }: {
   );
 }
 
-function TeacherDashboard({ students, notifications, onSelect, onBack, onDismissNotification, onDismissAllNotifications, onPromoteFromNotification, onAddStudent }: {
+function TeacherLogin({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoading(true); setError("");
+    try {
+      const response = await fetch(`http://${window.location.hostname}:3001/api/teacher/login`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      if (!response.ok) throw new Error((await response.json()).message ?? "Não foi possível entrar.");
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível entrar.");
+    } finally { setLoading(false); }
+  };
+  return (
+    <div className="min-h-screen flex items-center justify-center p-5" style={{ background:"linear-gradient(145deg,#fdf4ff,#ede9fe,#e0e7ff)" }}>
+      <form onSubmit={submit} className="w-full max-w-sm bg-white rounded-3xl p-7 shadow-xl border-2 border-violet-100">
+        <button type="button" onClick={onBack} className="text-violet-500 text-sm font-bold mb-6">← VOLTAR</button>
+        <div className="text-center mb-6"><div className="text-5xl mb-2">👩‍🏫</div><h1 className="text-3xl text-violet-800 font-bold" style={{ fontFamily:"Fredoka,sans-serif" }}>ÁREA DO PROFESSOR</h1><p className="text-gray-400 font-bold text-sm mt-1">ACESSO RESTRITO</p></div>
+        <label className="block text-xs font-bold text-gray-500 mb-1">USUÁRIO</label>
+        <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-violet-400 outline-none mb-4" placeholder="Digite seu usuário" />
+        <label className="block text-xs font-bold text-gray-500 mb-1">SENHA</label>
+        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-violet-400 outline-none" placeholder="Digite sua senha" />
+        {error && <p className="text-red-500 text-sm font-bold mt-3">{error}</p>}
+        <button disabled={loading || !username || !password} className="w-full mt-5 py-3 rounded-xl bg-violet-600 text-white font-bold hover:bg-violet-700 disabled:opacity-50 transition-all" style={{ fontFamily:"Fredoka,sans-serif" }}>{loading ? "ENTRANDO..." : "ENTRAR NO PAINEL"}</button>
+        <p className="text-xs text-gray-400 text-center mt-4">As credenciais podem ser alteradas pelas variáveis TEACHER_USERNAME e TEACHER_PASSWORD no servidor.</p>
+      </form>
+    </div>
+  );
+}
+function TeacherDashboard({ students, notifications, onSelect, onBack, onLogout, onDeleteStudent, onDismissNotification, onDismissAllNotifications, onPromoteFromNotification, onAddStudent }: {
   students: Student[]; notifications: TeacherNotification[];
   onSelect: (s: Student) => void; onBack: () => void;
+  onLogout: () => void; onDeleteStudent: (studentId: number) => void;
   onDismissNotification: (id: number) => void; onDismissAllNotifications: () => void;
   onPromoteFromNotification: (studentId: number, area: Area, notifId: number) => void;
   onAddStudent: (name: string, emoji: string) => void;
@@ -1823,6 +1859,7 @@ function TeacherDashboard({ students, notifications, onSelect, onBack, onDismiss
         <div className="flex items-center justify-between mb-1">
           <button onClick={onBack} className="text-white/60 text-sm font-bold hover:text-white" style={{ fontFamily:"Fredoka,sans-serif" }}>← VOLTAR</button>
           <div className="flex items-center gap-2">
+            <button onClick={onLogout} className="px-3 py-2 rounded-2xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all" style={{ fontFamily:"Fredoka,sans-serif" }}>SAIR</button>
             <button onClick={() => { setShowAddStudent(v=>!v); setShowNotifications(false); }}
               className="flex items-center gap-1 px-3 py-2 rounded-2xl bg-white/20 hover:bg-white/30 text-white text-sm font-bold transition-all"
               style={{ fontFamily:"Fredoka,sans-serif" }}>
@@ -1890,9 +1927,9 @@ function TeacherDashboard({ students, notifications, onSelect, onBack, onDismiss
           const litReady = s.literacyMissionsDone >= MISSIONS_REQUIRED;
           const mathReady = s.mathMissionsDone >= MISSIONS_REQUIRED;
           return (
-            <button key={s.id} onClick={() => onSelect(s)}
+            <div key={s.id}
               className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:border-violet-200 hover:shadow-md transition-all text-left">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 cursor-pointer" onClick={() => onSelect(s)}>
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 border-2 border-gray-100" style={{ background:litM.pastelBg }}>{s.emoji}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -1918,7 +1955,8 @@ function TeacherDashboard({ students, notifications, onSelect, onBack, onDismiss
                 </div>
                 <span className="text-gray-300 text-lg">›</span>
               </div>
-            </button>
+              <button onClick={() => onDeleteStudent(s.id)} className="w-full mt-3 py-2 rounded-xl border-2 border-red-100 text-red-500 text-xs font-bold hover:bg-red-50 transition-all" style={{ fontFamily:"Fredoka,sans-serif" }}>🗑️ EXCLUIR ALUNO</button>
+            </div>
           );
         })}
       </div>
@@ -2424,7 +2462,7 @@ useEffect(() => {
 
   return (
     <div className="size-full">
-      {view === "avatar" && <AvatarScreen students={students} onSelect={handleAvatarSelect} onTeacher={() => { stopSpeech(); setView("teacher"); }} />}
+      {view === "avatar" && <AvatarScreen students={students} onSelect={handleAvatarSelect} onTeacher={() => { stopSpeech(); setView("teacher-login"); }} />}
       {view === "area-select" && currentStudent && (
         <AreaSelectScreen student={currentStudent} onSelect={handleAreaSelect}
           onSondagem={() => { stopSpeech(); setView("sondagem-hub"); }}
@@ -2444,10 +2482,13 @@ useEffect(() => {
         <FeedbackScreen correct={feedbackCorrect} missionsDoneAfter={feedbackMissionsDone}
           area={selectedArea} onContinue={() => { setGameKey((k) => k + 1); setView("game"); }} />
       )}
+      {view === "teacher-login" && <TeacherLogin onSuccess={() => setView("teacher")} onBack={() => setView("avatar")} />}
       {view === "teacher" && (
         <TeacherDashboard students={students} notifications={notifications}
           onSelect={(s) => { setSelectedId(s.id); setView("profile"); }}
           onBack={() => setView("avatar")}
+          onLogout={handleTeacherLogout}
+          onDeleteStudent={handleDeleteStudent}
           onDismissNotification={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
           onDismissAllNotifications={() => setNotifications([])}
           onPromoteFromNotification={handlePromoteFromNotification}
