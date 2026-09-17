@@ -1753,7 +1753,7 @@ function NotificationsPanel({ notifications, onDismiss, onDismissAll, onPromote 
 }
 
 const STUDENT_EMOJIS = ["🦋","🐯","🐸","🦁","🦄","🚀","🐱","🐶","🐨","🐵","🐧","🦊","🐢","🐝","🌟","🐙", "🐺", "🦒", "🐷", "🐮",
-  "🦝", "🐭", "🐗", "🐹", "🐰", "🐻", "🐼", "🦉", "🐞", "🦩", "🦜", "🦑"];
+  "🦝", "🐭", "🐗", "🐹", "🐰", "🐻", "🐼", "🦉", "🐞", "🦩", "🦜", "🦑", "🦓", "🐲"];
 
 function AddStudentForm({ existingNames, onAdd, onCancel }: {
   existingNames: string[]; onAdd: (name: string, emoji: string) => void; onCancel: () => void;
@@ -2214,6 +2214,29 @@ export default function App() {
   const [gameKey, setGameKey] = useState(0);
   const [notifications, setNotifications] = useState<TeacherNotification[]>([]);
   
+  const updateStudentOnServer = async (student: Student) => {
+  try {
+    const response = await fetch(
+      `http://${window.location.hostname}:3001/api/students/${student.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(student),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Erro ao atualizar aluno");
+    }
+
+    console.log(`Aluno ${student.name} atualizado no servidor.`);
+  } catch (error) {
+    console.error("Erro ao atualizar aluno:", error);
+  }
+};
+
   useEffect(() => {
   const loadStudents = async () => {
     try {
@@ -2249,33 +2272,6 @@ export default function App() {
 
   loadStudents();
 }, []);
-
-useEffect(() => {
-  if (isLoadingFromServer.current) {
-    isLoadingFromServer.current = false;
-    return;
-  }
-
-  const saveStudents = async () => {
-    try {
-      await fetch(
-        `http://${window.location.hostname}:3001/api/students`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify(students),
-        }
-      );
-    } catch (error) {
-      console.error("Erro ao salvar alunos:", error);
-    }
-  };
-
-  saveStudents();
-}, [students]);
 
 useEffect(() => {
   const interval = setInterval(async () => {
@@ -2369,39 +2365,61 @@ useEffect(() => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
   };
 
-  const handleAddStudent = (name: string, emoji: string) => {
-    setStudents((prev) => [
-      ...prev,
-      {
-        id: prev.reduce((max, s) => Math.max(max, s.id), 0) + 1,
-        name, emoji,
-        literacyLevel: 1, literacyStars: 0, literacyMissionsDone: 0, lastLiteracySondagem: null,
-        mathLevel: 1, mathStars: 0, mathMissionsDone: 0, lastMathSondagem: null,
-        sondagemHistory: [],
-        skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0 },
-        attempts: 0, accuracy: 0, audioEnabled: true,
-      },
-    ]);
+  const handleAddStudent = async (name: string, emoji: string) => {
+  const newStudent = {
+    name,
+    emoji,
+    literacyLevel: 1,
+    literacyStars: 0,
+    literacyMissionsDone: 0,
+    lastLiteracySondagem: null,
+
+    mathLevel: 1,
+    mathStars: 0,
+    mathMissionsDone: 0,
+    lastMathSondagem: null,
+
+    sondagemHistory: [],
+
+    skills: {
+      letras: 0,
+      silabas: 0,
+      sons: 0,
+      palavras: 0,
+      escrita: 0,
+    },
+
+    attempts: 0,
+    accuracy: 0,
+    audioEnabled: true,
   };
 
-  const handleDeleteStudent = async (studentId: number) => {
-    const student = students.find((s) => s.id === studentId);
-    if (!student || !window.confirm(`Excluir o aluno ${student.name}? Todo o histórico será removido.`)) return;
-    try {
-      const response = await fetch(`http://${window.location.hostname}:3001/api/students/${studentId}`, { method: "DELETE", credentials: "include" });
-      if (!response.ok) throw new Error("Não foi possível excluir o aluno.");
-      setStudents((prev) => prev.filter((s) => s.id !== studentId));
-      setNotifications((prev) => prev.filter((n) => n.studentId !== studentId));
-      if (selectedId === studentId) { setSelectedId(null); setView("teacher"); }
-    } catch (error) {
-      console.error(error);
-      window.alert("Não foi possível excluir o aluno. Entre novamente na área do professor.");
+  try {
+    const response = await fetch(
+      `http://${window.location.hostname}:3001/api/students`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newStudent),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Erro ao cadastrar aluno");
     }
-  };
-  const handleTeacherLogout = async () => {
-    await fetch(`http://${window.location.hostname}:3001/api/teacher/logout`, { method: "POST", credentials: "include" }).catch(() => undefined);
-    setView("avatar");
-  };
+
+    const data = await response.json();
+
+    setStudents((prev) => [...prev, data.student]);
+
+    console.log("Aluno cadastrado:", data.student);
+  } catch (error) {
+    console.error("Erro ao cadastrar aluno:", error);
+  }
+};
+
   const handleToggleAudio = (studentId: number) => {
     setStudents(prev => prev.map(s => s.id === studentId ? { ...s, audioEnabled: !s.audioEnabled } : s));
   };
