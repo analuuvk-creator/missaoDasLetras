@@ -1752,14 +1752,68 @@ function NotificationsPanel({ notifications, onDismiss, onDismissAll, onPromote 
   );
 }
 
-function TeacherDashboard({ students, notifications, onSelect, onBack, onDismissNotification, onDismissAllNotifications, onPromoteFromNotification }: {
+const STUDENT_EMOJIS = ["🦋","🐯","🐸","🦁","🦄","🚀","🐱","🐶","🐨","🐵","🐧","🦊","🐢","🐝","🌟","🐙", "🐺", "🦒", "🐷", "🐮",
+  "🦝", "🐭", "🐗", "🐹", "🐰", "🐻", "🐼", "🦉", "🐞", "🦩", "🦜", "🦑"];
+
+function AddStudentForm({ existingNames, onAdd, onCancel }: {
+  existingNames: string[]; onAdd: (name: string, emoji: string) => void; onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [emoji, setEmoji] = useState(STUDENT_EMOJIS[0]);
+  const [error, setError] = useState("");
+
+  const submit = () => {
+    const clean = name.trim().toUpperCase();
+    if (clean.length < 2) { setError("DIGITE UM NOME COM PELO MENOS 2 LETRAS"); return; }
+    if (existingNames.includes(clean)) { setError("JÁ EXISTE UM ALUNO COM ESSE NOME"); return; }
+    onAdd(clean, emoji);
+  };
+
+  return (
+    <div className="mx-4 mt-4 bg-white rounded-2xl shadow-lg border border-gray-100 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="font-bold text-gray-800 text-base" style={{ fontFamily:"Fredoka,sans-serif" }}>➕ CADASTRAR ALUNO</p>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 text-lg">×</button>
+      </div>
+      <label className="block text-xs font-bold text-gray-500 mb-1" style={{ fontFamily:"Fredoka,sans-serif" }}>NOME DO ALUNO</label>
+      <input value={name}
+        onChange={(e) => { setName(e.target.value); setError(""); }}
+        onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+        placeholder="EX: BEATRIZ" maxLength={16}
+        className="w-full px-3 py-2 rounded-xl border-2 border-gray-200 text-gray-800 font-bold text-base uppercase outline-none focus:border-violet-400 transition-all"
+        style={{ fontFamily:"Fredoka,sans-serif" }} />
+      <p className="text-xs font-bold text-gray-500 mt-3 mb-2" style={{ fontFamily:"Fredoka,sans-serif" }}>ESCOLHA UM AVATAR</p>
+      <div className="grid grid-cols-8 gap-1.5">
+        {STUDENT_EMOJIS.map((e) => (
+          <button key={e} onClick={() => setEmoji(e)}
+            className={`h-10 rounded-xl text-xl border-2 transition-all active:scale-90 ${emoji===e?"bg-violet-50 border-violet-400":"bg-white border-gray-200 hover:border-violet-200"}`}>
+            {e}
+          </button>
+        ))}
+      </div>
+      {error && <p className="text-xs font-bold text-red-500 mt-3">{error}</p>}
+      <div className="flex gap-2 mt-4">
+        <button onClick={onCancel}
+          className="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-500 font-bold text-sm hover:bg-gray-50 active:scale-95 transition-all"
+          style={{ fontFamily:"Fredoka,sans-serif" }}>CANCELAR</button>
+        <button onClick={submit}
+          className="flex-1 py-2.5 rounded-xl bg-violet-500 text-white font-bold text-sm hover:bg-violet-600 active:scale-95 transition-all shadow-md"
+          style={{ fontFamily:"Fredoka,sans-serif" }}>✓ CADASTRAR</button>
+      </div>
+    </div>
+  );
+}
+
+function TeacherDashboard({ students, notifications, onSelect, onBack, onDismissNotification, onDismissAllNotifications, onPromoteFromNotification, onAddStudent }: {
   students: Student[]; notifications: TeacherNotification[];
   onSelect: (s: Student) => void; onBack: () => void;
   onDismissNotification: (id: number) => void; onDismissAllNotifications: () => void;
   onPromoteFromNotification: (studentId: number, area: Area, notifId: number) => void;
+  onAddStudent: (name: string, emoji: string) => void;
 }) {
   const [filter, setFilter] = useState<"all"|"literacy"|"math">("all");
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showAddStudent, setShowAddStudent] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
   const avgAccuracy = students.length ? Math.round(students.reduce((a,s)=>a+s.accuracy,0)/students.length) : 0;
 
@@ -1768,14 +1822,21 @@ function TeacherDashboard({ students, notifications, onSelect, onBack, onDismiss
       <div className="text-white p-6 shadow-xl" style={{ background:"linear-gradient(135deg,#4c1d95,#6d28d9)" }}>
         <div className="flex items-center justify-between mb-1">
           <button onClick={onBack} className="text-white/60 text-sm font-bold hover:text-white" style={{ fontFamily:"Fredoka,sans-serif" }}>← VOLTAR</button>
-          <button onClick={() => setShowNotifications(v=>!v)} className="relative p-2 rounded-2xl bg-white/20 hover:bg-white/30 transition-all">
-            <span className="text-xl">🔔</span>
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs font-bold flex items-center justify-center animate-pulse-glow">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => { setShowAddStudent(v=>!v); setShowNotifications(false); }}
+              className="flex items-center gap-1 px-3 py-2 rounded-2xl bg-white/20 hover:bg-white/30 text-white text-sm font-bold transition-all"
+              style={{ fontFamily:"Fredoka,sans-serif" }}>
+              <span className="text-base">➕</span> NOVO ALUNO
+            </button>
+            <button onClick={() => { setShowNotifications(v=>!v); setShowAddStudent(false); }} className="relative p-2 rounded-2xl bg-white/20 hover:bg-white/30 transition-all">
+              <span className="text-xl">🔔</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs font-bold flex items-center justify-center animate-pulse-glow">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-3 mb-1">
           <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl">👩‍🏫</div>
@@ -1792,6 +1853,13 @@ function TeacherDashboard({ students, notifications, onSelect, onBack, onDismiss
           ))}
         </div>
       </div>
+      {showAddStudent && (
+        <AddStudentForm
+          existingNames={students.map(s => s.name.toUpperCase())}
+          onAdd={(name, emoji) => { onAddStudent(name, emoji); setShowAddStudent(false); }}
+          onCancel={() => setShowAddStudent(false)}
+        />
+      )}
       {showNotifications && (
         <div className="mx-4 mt-4 bg-white rounded-2xl shadow-lg border border-gray-100 p-4">
           <div className="flex items-center justify-between mb-3">
@@ -2262,6 +2330,21 @@ useEffect(() => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
   };
 
+  const handleAddStudent = (name: string, emoji: string) => {
+    setStudents((prev) => [
+      ...prev,
+      {
+        id: prev.reduce((max, s) => Math.max(max, s.id), 0) + 1,
+        name, emoji,
+        literacyLevel: 1, literacyStars: 0, literacyMissionsDone: 0, lastLiteracySondagem: null,
+        mathLevel: 1, mathStars: 0, mathMissionsDone: 0, lastMathSondagem: null,
+        sondagemHistory: [],
+        skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0 },
+        attempts: 0, accuracy: 0, audioEnabled: true,
+      },
+    ]);
+  };
+
   const handleToggleAudio = (studentId: number) => {
     setStudents(prev => prev.map(s => s.id === studentId ? { ...s, audioEnabled: !s.audioEnabled } : s));
   };
@@ -2330,7 +2413,8 @@ useEffect(() => {
           onBack={() => setView("avatar")}
           onDismissNotification={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
           onDismissAllNotifications={() => setNotifications([])}
-          onPromoteFromNotification={handlePromoteFromNotification} />
+          onPromoteFromNotification={handlePromoteFromNotification}
+          onAddStudent={handleAddStudent} />
       )}
       {view === "profile" && currentStudent && (
         <StudentProfile student={currentStudent}
