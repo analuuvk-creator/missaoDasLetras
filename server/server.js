@@ -1,8 +1,9 @@
 import express from "express";
 import cors from "cors";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const app = express();
 const PORT = 3001;
@@ -13,185 +14,108 @@ const teacherSessions = new Set();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-const PORT = 3001;
-
-// =========================================
-// CONFIGURAÇÃO DO ARQUIVO DE DADOS
-// =========================================
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const dataFile = path.join(__dirname, "students.json");
-
-// =========================================
-// CARREGAR ALUNOS
-// =========================================
-
-let students = [];
+const studentsFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "students.json");
 
 function loadStudents() {
   try {
-    if (fs.existsSync(dataFile)) {
-      const data = fs.readFileSync(dataFile, "utf-8");
-
-      if (data.trim()) {
-        students = JSON.parse(data);
-      }
-    }
-  } catch (error) {
-    console.error("Erro ao carregar alunos:", error);
-    students = [];
+    const data = JSON.parse(fs.readFileSync(studentsFile, "utf8"));
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
   }
 }
 
-// =========================================
-// SALVAR ALUNOS
-// =========================================
-
-function saveStudents() {
-  try {
-    fs.writeFileSync(
-      dataFile,
-      JSON.stringify(students, null, 2),
-      "utf-8"
-    );
-  } catch (error) {
-    console.error("Erro ao salvar alunos:", error);
-  }
+function saveStudents(data) {
+  fs.writeFileSync(studentsFile, JSON.stringify(data, null, 2), "utf8");
 }
 
-loadStudents();
+let students = loadStudents();
 
-// =========================================
-// STATUS DO SERVIDOR
-// =========================================
+function getSessionToken(req) {
+  const cookie = req.headers.cookie ?? "";
+  return cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("teacher_session="))?.split("=")[1];
+}
 
-app.get("/api/status", (_req, res) => {
-  res.json({
-    ok: true,
-    message: "Servidor funcionando!",
-  });
-});
-
-// =========================================
-// BUSCAR TODOS OS ALUNOS
-// =========================================
-
-app.get("/api/students", (_req, res) => {
-  res.json(students);
-});
-
-// =========================================
-// ADICIONAR UM NOVO ALUNO
-// =========================================
-
-app.post("/api/students", (req, res) => {
-  const student = req.body;
-
-  if (!student || !student.name) {
-    return res.status(400).json({
-      ok: false,
-      message: "Aluno inválido.",
-    });
+function requireTeacher(req, res, next) {
+  const token = getSessionToken(req);
+  if (!token || !teacherSessions.has(token)) {
+    res.status(401).json({ ok: false, message: "Acesso restrito ao professor." });
+    return;
   }
+  next();
+}
 
-  // O servidor cria o ID
-  const newId =
-    students.length > 0
-      ? Math.max(...students.map((s) => Number(s.id) || 0)) + 1
-      : 1;
+app.get("/api/status", (_req, res) => res.json({ ok: true, message: "Servidor funcionando!" }));
 
-  const newStudent = {
-    ...student,
-    id: newId,
-  };
-
-  students.push(newStudent);
-
-  saveStudents();
-
-  console.log(
-    `Aluno adicionado: ${newStudent.name} ${newStudent.emoji || ""}`
-  );
-
-  res.status(201).json({
-    ok: true,
-    student: newStudent,
-  });
-});
-
-// =========================================
-// ATUALIZAR UM ALUNO
-// =========================================
-
-app.put("/api/students/:id", (req, res) => {
-  const id = Number(req.params.id);
-
-  const index = students.findIndex(
-    (student) => Number(student.id) === id
-  );
-
-  if (index === -1) {
-    return res.status(404).json({
-      ok: false,
-      message: "Aluno não encontrado.",
-    });
+app.post("/api/teacher/login", (req, res) => {
+  const { username, password } = req.body ?? {};
+  if (username !== teacherUsername || password !== teacherPassword) {
+    res.status(401).json({ ok: false, message: "Usuário ou senha inválidos." });
+    return;
   }
-
-  students[index] = {
-    ...students[index],
-    ...req.body,
-    id: students[index].id,
-  };
-
-  saveStudents();
-
-  console.log(
-    `Aluno atualizado: ${students[index].name}`
-  );
-
-  res.json({
-    ok: true,
-    student: students[index],
-  });
+  const token = crypto.randomBytes(32).toString("hex");
+  teacherSessions.add(token);
+  res.setHeader("Set-Cookie", `teacher_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800`);
+  res.json({ ok: true });
 });
 
-// =========================================
-// EXCLUIR UM ALUNO
-// =========================================
+app.post("/api/teacher/logout", requireTeacher, (req, res) => {
+  const token = getSessionToken(req);
+  if (token) teacherSessions.delete(token);
+  res.setHeader("Set-Cookie", "teacher_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
+  res.json({ ok: true });
+});
 
-app.delete("/api/students/:id", (req, res) => {
-  const id = Number(req.params.id);
+app.get("/api/teacher/session", requireTeacher, (_req, res) => res.json({ ok: true }));
+app.get("/api/students", (_req, res) => res.json(students));
 
-  const index = students.findIndex(
-    (student) => Number(student.id) === id
-  );
-
-  if (index === -1) {
-    return res.status(404).json({
-      ok: false,
-      message: "Aluno não encontrado.",
-    });
+app.post("/api/students/bootstrap", requireTeacher, (req, res) => {
+  if (students.length === 0 && Array.isArray(req.body) && req.body.length > 0) {
+    students = req.body;
+    saveStudents(students);
   }
-
-  const removedStudent = students.splice(index, 1)[0];
-
-  saveStudents();
-
-  console.log(
-    `Aluno removido: ${removedStudent.name}`
-  );
-
-  res.json({
-    ok: true,
-    student: removedStudent,
-  });
+  res.json({ ok: true, students });
 });
 
-// =========================================
-// INICIAR SERVIDOR
-// =========================================
+app.post("/api/students/add", requireTeacher, (req, res) => {
+  const student = req.body ?? {};
+  if (typeof student.name !== "string" || typeof student.emoji !== "string") {
+    res.status(400).json({ ok: false, message: "Dados inválidos do aluno." });
+    return;
+  }
+  const name = student.name.trim().toUpperCase();
+  if (name.length < 2 || students.some((item) => item.name === name)) {
+    res.status(409).json({ ok: false, message: "Já existe um aluno com esse nome." });
+    return;
+  }
+  const newStudent = { ...student, id: students.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1, name };
+  students = [...students, newStudent];
+  saveStudents(students);
+  res.status(201).json({ ok: true, students });
+});
+
+app.post("/api/students", requireTeacher, (req, res) => {
+  if (!Array.isArray(req.body)) {
+    res.status(400).json({ ok: false, message: "Formato inválido de alunos." });
+    return;
+  }
+  students = req.body;
+  saveStudents(students);
+  console.log("Dados dos alunos atualizados.");
+  res.json({ ok: true, students });
+});
+
+app.delete("/api/students/:id", requireTeacher, (req, res) => {
+  const studentId = Number(req.params.id);
+  const previousLength = students.length;
+  students = students.filter((student) => Number(student.id) !== studentId);
+  if (students.length === previousLength) {
+    res.status(404).json({ ok: false, message: "Aluno não encontrado." });
+    return;
+  }
+  saveStudents(students);
+  res.json({ ok: true, students });
+});
 
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log("=================================");
@@ -200,9 +124,4 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log("=================================");
 });
 
-server.on("error", (error) => {
-  console.error(
-    "ERRO AO INICIAR O SERVIDOR:",
-    error
-  );
-});
+server.on("error", (error) => console.error("ERRO AO INICIAR O SERVIDOR:", error));

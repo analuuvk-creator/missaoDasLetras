@@ -534,6 +534,32 @@ const initialStudents: Student[] = [
   { id:6, name:"LUCAS", emoji:"🚀", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:30,silabas:20,sons:15,palavras:20,escrita:10}, attempts:0, accuracy:0, audioEnabled:true },
 ];
 
+const STUDENTS_STORAGE_KEY = "missao-das-letras:students";
+
+function readStoredStudents(): Student[] | null {
+  try {
+    const stored = window.localStorage.getItem(STUDENTS_STORAGE_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredStudents(students: Student[]) {
+  try {
+    window.localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(students));
+  } catch (error) {
+    console.error("Não foi possível salvar os alunos localmente:", error);
+  }
+}
+
+function getStudentsApiUrl() {
+  const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+  return `${protocol}//${window.location.hostname}:3001/api/students`;
+}
+
 // ════════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════════
@@ -1753,7 +1779,7 @@ function NotificationsPanel({ notifications, onDismiss, onDismissAll, onPromote 
 }
 
 const STUDENT_EMOJIS = ["🦋","🐯","🐸","🦁","🦄","🚀","🐱","🐶","🐨","🐵","🐧","🦊","🐢","🐝","🌟","🐙", "🐺", "🦒", "🐷", "🐮",
-  "🦝", "🐭", "🐗", "🐹", "🐰", "🐻", "🐼", "🦉", "🐞", "🦩", "🦜", "🦑", "🦓", "🐲"];
+  "🦝", "🐭", "🐗", "🐹", "🐰", "🐻", "🐼", "🦉", "🐞", "🦩", "🦜", "🦑"];
 
 function AddStudentForm({ existingNames, onAdd, onCancel }: {
   existingNames: string[]; onAdd: (name: string, emoji: string) => void; onCancel: () => void;
@@ -2202,8 +2228,11 @@ function StudentProfile({ student, onBack, onPromote, onDemote, onToggleAudio }:
 
 export default function App() {
   const [view, setView] = useState<AppView>("avatar");
-  const [students, setStudents] = useState<Student[]>(initialStudents);
-  const isLoadingFromServer = useRef(false);
+  const [students, setStudents] = useState<Student[]>(() => readStoredStudents() ?? initialStudents);
+  const hasLoadedStudents = useRef(false);
+  const serverHasStudents = useRef(false);
+  const pendingStudentNames = useRef(new Set<string>());
+  const [teacherAuthenticated, setTeacherAuthenticated] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedArea, setSelectedArea] = useState<Area>("literacy");
   const [sondagemResults, setSondagemResults] = useState<boolean[]>([]);
@@ -2214,92 +2243,100 @@ export default function App() {
   const [gameKey, setGameKey] = useState(0);
   const [notifications, setNotifications] = useState<TeacherNotification[]>([]);
   
-  const updateStudentOnServer = async (student: Student) => {
-  try {
-    const response = await fetch(
-      `http://${window.location.hostname}:3001/api/students/${student.id}`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(student),
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStudents = async () => {
+      try {
+        const response = await fetch(getStudentsApiUrl(), { credentials: "include" });
+        if (!response.ok) throw new Error("Erro ao buscar alunos");
+
+        const data = await response.json();
+        // An empty server response must not erase local data. This is important
+        // for the static deployment, where the Express server is not deployed.
+        if (!cancelled && Array.isArray(data) && data.length > 0) {
+          serverHasStudents.current = true;
+          setStudents(data);
+          writeStoredStudents(data);
+        }
+      } catch (error) {
+        console.error("Servidor indisponível; usando os alunos salvos neste dispositivo:", error);
+      } finally {
+        if (!cancelled) hasLoadedStudents.current = true;
       }
-    );
+    };
 
-    if (!response.ok) {
-      throw new Error("Erro ao atualizar aluno");
-    }
-
-    console.log(`Aluno ${student.name} atualizado no servidor.`);
-  } catch (error) {
-    console.error("Erro ao atualizar aluno:", error);
-  }
-};
+    loadStudents();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
-  const loadStudents = async () => {
-    try {
-      const response = await fetch(
-        `http://${window.location.hostname}:3001/api/students`
-      );
+    writeStoredStudents(students);
+  }, [students]);
 
-      if (!response.ok) {
-        throw new Error("Erro ao buscar alunos");
-      }
+  useEffect(() => {
+    if (!hasLoadedStudents.current || !teacherAuthenticated || serverHasStudents.current) return;
 
-      const data = await response.json();
-
-      if (Array.isArray(data) && data.length > 0) {
-        isLoadingFromServer.current = true;
-        setStudents(data);
-      } else {
-        await fetch(
-          `http://${window.location.hostname}:3001/api/students`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(initialStudents),
-          }
-        );
-      }
-    } catch (error) {
-      console.error("Erro ao conectar com o servidor:", error);
-    }
-  };
-
-  loadStudents();
-}, []);
-
-useEffect(() => {
-  const interval = setInterval(async () => {
-    try {
-      const response = await fetch(
-        `http://${window.location.hostname}:3001/api/students`
-      );
-
-      if (!response.ok) return;
-
-      const data = await response.json();
-
-      if (Array.isArray(data) && data.length > 0) {
-        const currentData = JSON.stringify(students);
-        const serverData = JSON.stringify(data);
-
-        if (currentData !== serverData) {
-          isLoadingFromServer.current = true;
-          setStudents(data);
+    let cancelled = false;
+    const bootstrapStudents = async () => {
+      try {
+        const response = await fetch(`${getStudentsApiUrl()}/bootstrap`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(students),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (!cancelled && Array.isArray(data.students) && data.students.length > 0) {
+          serverHasStudents.current = true;
+          setStudents(data.students);
         }
+      } catch (error) {
+        console.error("Não foi possível inicializar a lista compartilhada de alunos:", error);
       }
-    } catch (error) {
-      console.error("Servidor indisponível:", error);
-    }
-  }, 1000);
+    };
 
-  return () => clearInterval(interval);
-}, [students]);
+    bootstrapStudents();
+    return () => { cancelled = true; };
+  }, [teacherAuthenticated]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== STUDENTS_STORAGE_KEY || !event.newValue) return;
+      try {
+        const data = JSON.parse(event.newValue);
+        if (Array.isArray(data)) setStudents(data);
+      } catch {
+        // Ignore malformed values written by another tab.
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  useEffect(() => {
+    const refreshStudents = async () => {
+      if (pendingStudentNames.current.size > 0) return;
+      try {
+        const response = await fetch(getStudentsApiUrl(), { credentials: "include" });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!Array.isArray(data) || data.length === 0) return;
+        serverHasStudents.current = true;
+        if (JSON.stringify(data) !== JSON.stringify(students)) {
+          setStudents(data);
+          writeStoredStudents(data);
+        }
+      } catch {
+        // Keep the current list when the shared server is temporarily offline.
+      }
+    };
+
+    const interval = window.setInterval(refreshStudents, 2000);
+    return () => window.clearInterval(interval);
+  }, [students]);
 
   const currentStudent = selectedId != null ? (students.find((s) => s.id === selectedId) ?? null) : null;
   const currentIdx = activityQueue[queuePos % Math.max(activityQueue.length, 1)] ?? 0;
@@ -2365,49 +2402,23 @@ useEffect(() => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
   };
 
-  const handleAddStudent = async (name: string, emoji: string) => {
-  const newStudent = {
-    name,
-    emoji,
-    literacyLevel: 1,
-    literacyStars: 0,
-    literacyMissionsDone: 0,
-    lastLiteracySondagem: null,
+  const handleAddStudent = (name: string, emoji: string) => {
+    const newStudent: Student = {
+      id: 0,
+      name, emoji,
+      literacyLevel: 1, literacyStars: 0, literacyMissionsDone: 0, lastLiteracySondagem: null,
+      mathLevel: 1, mathStars: 0, mathMissionsDone: 0, lastMathSondagem: null,
+      sondagemHistory: [],
+      skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0 },
+      attempts: 0, accuracy: 0, audioEnabled: true,
+    };
 
-    mathLevel: 1,
-    mathStars: 0,
-    mathMissionsDone: 0,
-    lastMathSondagem: null,
-
-    sondagemHistory: [],
-
-    skills: {
-      letras: 0,
-      silabas: 0,
-      sons: 0,
-      palavras: 0,
-      escrita: 0,
-    },
-
-    attempts: 0,
-    accuracy: 0,
-    audioEnabled: true,
-  };
-
-  try {
-    const response = await fetch(
-      `http://${window.location.hostname}:3001/api/students`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newStudent),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error("Erro ao cadastrar aluno");
+    // Optimistic local update keeps the new student visible immediately.
+    pendingStudentNames.current.add(name);
+    setStudents((prev) => [...prev, { ...newStudent, id: prev.reduce((max, s) => Math.max(max, s.id), 0) + 1 }]);
+    if (!teacherAuthenticated) {
+      pendingStudentNames.current.delete(name);
+      return;
     }
 
     const data = await response.json();
@@ -2425,6 +2436,18 @@ setStudents((prev) => [...prev, data.student]);
   }
 };
 
+  const handleDeleteStudent = async (studentId: number) => {
+    const student = students.find((s) => s.id === studentId);
+    if (!student || !window.confirm(`Excluir o aluno ${student.name}? Todo o histórico será removido.`)) return;
+    setStudents((prev) => prev.filter((s) => s.id !== studentId));
+    setNotifications((prev) => prev.filter((n) => n.studentId !== studentId));
+    if (selectedId === studentId) { setSelectedId(null); setView("teacher"); }
+  };
+  const handleTeacherLogout = async () => {
+    await fetch(`http://${window.location.hostname}:3001/api/teacher/logout`, { method: "POST", credentials: "include" }).catch(() => undefined);
+    setTeacherAuthenticated(false);
+    setView("avatar");
+  };
   const handleToggleAudio = (studentId: number) => {
     setStudents(prev => prev.map(s => s.id === studentId ? { ...s, audioEnabled: !s.audioEnabled } : s));
   };
@@ -2487,7 +2510,7 @@ setStudents((prev) => [...prev, data.student]);
         <FeedbackScreen correct={feedbackCorrect} missionsDoneAfter={feedbackMissionsDone}
           area={selectedArea} onContinue={() => { setGameKey((k) => k + 1); setView("game"); }} />
       )}
-      {view === "teacher-login" && <TeacherLogin onSuccess={() => setView("teacher")} onBack={() => setView("avatar")} />}
+      {view === "teacher-login" && <TeacherLogin onSuccess={() => { setTeacherAuthenticated(true); setView("teacher"); }} onBack={() => setView("avatar")} />}
       {view === "teacher" && (
         <TeacherDashboard students={students} notifications={notifications}
           onSelect={(s) => { setSelectedId(s.id); setView("profile"); }}
