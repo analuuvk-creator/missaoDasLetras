@@ -556,6 +556,9 @@ function writeStoredStudents(students: Student[]) {
 }
 
 function getStudentsApiUrl() {
+  const configuredUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "");
+  if (configuredUrl) return `${configuredUrl}/api/students`;
+  if (window.location.port === "3001") return `${window.location.origin}/api/students`;
   const protocol = window.location.protocol === "https:" ? "https:" : "http:";
   return `${protocol}//${window.location.hostname}:3001/api/students`;
 }
@@ -2254,10 +2257,12 @@ export default function App() {
         const data = await response.json();
         // An empty server response must not erase local data. This is important
         // for the static deployment, where the Express server is not deployed.
-        if (!cancelled && Array.isArray(data) && data.length > 0) {
+        if (!cancelled && Array.isArray(data)) {
           serverHasStudents.current = true;
-          setStudents(data);
-          writeStoredStudents(data);
+          if (data.length > 0) {
+            setStudents(data);
+            writeStoredStudents(data);
+          }
         }
       } catch (error) {
         console.error("Servidor indisponível; usando os alunos salvos neste dispositivo:", error);
@@ -2402,7 +2407,7 @@ export default function App() {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
   };
 
-  const handleAddStudent = (name: string, emoji: string) => {
+  const handleAddStudent = async (name: string, emoji: string) => {
     const newStudent: Student = {
       id: 0,
       name, emoji,
@@ -2413,28 +2418,34 @@ export default function App() {
       attempts: 0, accuracy: 0, audioEnabled: true,
     };
 
-    // Optimistic local update keeps the new student visible immediately.
     pendingStudentNames.current.add(name);
-    setStudents((prev) => [...prev, { ...newStudent, id: prev.reduce((max, s) => Math.max(max, s.id), 0) + 1 }]);
     if (!teacherAuthenticated) {
       pendingStudentNames.current.delete(name);
+      window.alert("Entre na área do professor antes de cadastrar um aluno.");
       return;
     }
 
-    const data = await response.json();
-
-    if (!data.student) {
-  console.error("Servidor não devolveu o aluno:", data);
-  return;
-}
-
-setStudents((prev) => [...prev, data.student]);
-
-    console.log("Aluno cadastrado:", data.student);
-  } catch (error) {
-    console.error("Erro ao cadastrar aluno:", error);
-  }
-};
+    try {
+      const response = await fetch(`${getStudentsApiUrl()}/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(newStudent),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !Array.isArray(data.students)) {
+        throw new Error(data.message ?? `HTTP ${response.status}`);
+      }
+      serverHasStudents.current = true;
+      setStudents(data.students);
+      writeStoredStudents(data.students);
+    } catch (error) {
+      console.error("Erro ao cadastrar aluno:", error);
+      window.alert("Não foi possível salvar o aluno no servidor compartilhado. Verifique se o servidor está ativo.");
+    } finally {
+      pendingStudentNames.current.delete(name);
+    }
+  };
 
   const handleDeleteStudent = async (studentId: number) => {
     const student = students.find((s) => s.id === studentId);

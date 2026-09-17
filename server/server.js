@@ -7,12 +7,14 @@ import { fileURLToPath } from "node:url";
 
 const app = express();
 const PORT = 3001;
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const teacherUsername = process.env.TEACHER_USERNAME ?? "professor";
 const teacherPassword = process.env.TEACHER_PASSWORD ?? "missao2026";
 const teacherSessions = new Set();
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(express.static(path.join(projectRoot, "dist")));
 
 const studentsFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "students.json");
 
@@ -115,6 +117,14 @@ app.delete("/api/students/:id", requireTeacher, (req, res) => {
   }
   saveStudents(students);
   res.json({ ok: true, students });
+});
+
+app.use((req, res, next) => {
+  if (req.method === "GET" && !req.path.startsWith("/api/")) {
+    res.sendFile(path.join(projectRoot, "dist", "index.html"));
+    return;
+  }
+  next();
 });
 
 const server = app.listen(PORT, "0.0.0.0", () => {
