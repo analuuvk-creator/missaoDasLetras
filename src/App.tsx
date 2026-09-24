@@ -2439,22 +2439,29 @@ export default function App() {
   const handleSondagemHubSelect = (area: Area) => { setSelectedArea(area); setView("sondagem"); };
 
   const persistSondagem = async (studentId: number, entry: SondagemEntry) => {
-    try {
-      const response = await fetch(`${getStudentsApiUrl()}/${studentId}/sondagem`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(entry),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (Array.isArray(data.students)) {
-        serverHasStudents.current = true;
-        setStudents(data.students);
-        writeStoredStudents(data.students);
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const response = await fetch(`${getStudentsApiUrl()}/${studentId}/sondagem`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(entry),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (Array.isArray(data.students)) {
+          serverHasStudents.current = true;
+          setStudents(data.students);
+          writeStoredStudents(data.students);
+        }
+        return;
+      } catch (error) {
+        if (attempt === 3) {
+          console.error("Não foi possível salvar a sondagem no servidor após 3 tentativas:", error);
+          return;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, attempt * 500));
       }
-    } catch (error) {
-      console.error("Não foi possível salvar a sondagem no servidor:", error);
     }
   };
 
@@ -2466,7 +2473,7 @@ export default function App() {
       ...s,
       lastLiteracySondagem: selectedArea === "literacy" ? today() : s.lastLiteracySondagem,
       lastMathSondagem: selectedArea === "math" ? today() : s.lastMathSondagem,
-      sondagemHistory: [...s.sondagemHistory, entry],
+      sondagemHistory: [...(Array.isArray(s.sondagemHistory) ? s.sondagemHistory : []), entry],
     });
     setStudents(nextStudents);
     writeStoredStudents(nextStudents);

@@ -52,6 +52,12 @@ function readSeedStudents() {
 function mergeSeedStudents(existing) {
   const existingNames = new Set(existing.map((student) => String(student.name ?? "").trim().toUpperCase()));
   let nextId = existing.reduce((max, student) => Math.max(max, Number(student.id) || 0), 0) + 1;
+  const normalizedExisting = existing.map((student) => ({
+    ...student,
+    sondagemHistory: Array.isArray(student.sondagemHistory) ? student.sondagemHistory : [],
+    lastLiteracySondagem: student.lastLiteracySondagem ?? null,
+    lastMathSondagem: student.lastMathSondagem ?? null,
+  }));
   const additions = readSeedStudents()
     .filter((seed) => {
       const name = String(seed.name ?? "").trim().toUpperCase();
@@ -63,7 +69,7 @@ function mergeSeedStudents(existing) {
       existingNames.add(student.name);
       return student;
     });
-  return additions.length > 0 ? [...existing, ...additions] : existing;
+  return additions.length > 0 ? [...normalizedExisting, ...additions] : normalizedExisting;
 }
 
 function loadStudents() {
