@@ -563,6 +563,10 @@ function getStudentsApiUrl() {
   return `${protocol}//${window.location.hostname}:3001/api/students`;
 }
 
+function getApiBaseUrl() {
+  return getStudentsApiUrl().replace(/\/students$/, "");
+}
+
 // ════════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════════
@@ -1842,7 +1846,7 @@ function TeacherLogin({ onSuccess, onBack }: { onSuccess: () => void; onBack: ()
     event.preventDefault();
     setLoading(true); setError("");
     try {
-      const response = await fetch(`http://${window.location.hostname}:3001/api/teacher/login`, {
+      const response = await fetch(`${getApiBaseUrl()}/teacher/login`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ username: username.trim(), password }),
       });
@@ -2503,7 +2507,7 @@ export default function App() {
     if (selectedId === studentId) { setSelectedId(null); setView("teacher"); }
   };
   const handleTeacherLogout = async () => {
-    await fetch(`http://${window.location.hostname}:3001/api/teacher/logout`, { method: "POST", credentials: "include" }).catch(() => undefined);
+    await fetch(`${getApiBaseUrl()}/teacher/logout`, { method: "POST", credentials: "include" }).catch(() => undefined);
     setTeacherAuthenticated(false);
     setView("avatar");
   };
