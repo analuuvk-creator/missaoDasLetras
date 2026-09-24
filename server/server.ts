@@ -128,6 +128,37 @@ app.get("/api/students", (_req, res) => {
   res.json(students);
 });
 
+app.post("/api/students/:id/sondagem", (req, res) => {
+  const studentId = Number(req.params.id);
+  const entry = req.body ?? {};
+  const studentIndex = students.findIndex((student) => Number(student.id) === studentId);
+  if (studentIndex < 0) {
+    res.status(404).json({ ok: false, message: "Aluno não encontrado." });
+    return;
+  }
+  if (!entry || !["literacy", "math"].includes(entry.area) || !Number.isFinite(Number(entry.level)) || !Number.isFinite(Number(entry.score)) || !Number.isFinite(Number(entry.total)) || !Array.isArray(entry.responses)) {
+    res.status(400).json({ ok: false, message: "Dados inválidos da sondagem." });
+    return;
+  }
+  const normalizedEntry = {
+    date: typeof entry.date === "string" ? entry.date : new Date().toDateString(),
+    area: entry.area,
+    level: Number(entry.level),
+    score: Number(entry.score),
+    total: Number(entry.total),
+    responses: entry.responses,
+  };
+  const student = students[studentIndex];
+  students[studentIndex] = {
+    ...student,
+    lastLiteracySondagem: normalizedEntry.area === "literacy" ? normalizedEntry.date : student.lastLiteracySondagem,
+    lastMathSondagem: normalizedEntry.area === "math" ? normalizedEntry.date : student.lastMathSondagem,
+    sondagemHistory: [...(Array.isArray(student.sondagemHistory) ? student.sondagemHistory : []), normalizedEntry],
+  };
+  saveStudents(students);
+  res.status(201).json({ ok: true, student: students[studentIndex], students });
+});
+
 app.post("/api/students/bootstrap", requireTeacher, (req, res) => {
   if (students.length === 0 && Array.isArray(req.body) && req.body.length > 0) {
     students = req.body;

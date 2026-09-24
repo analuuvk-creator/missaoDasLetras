@@ -2406,16 +2406,39 @@ export default function App() {
   const handleAreaSelect = (area: Area) => { setSelectedArea(area); startGame(area, currentStudent!); };
   const handleSondagemHubSelect = (area: Area) => { setSelectedArea(area); setView("sondagem"); };
 
+  const persistSondagem = async (studentId: number, entry: SondagemEntry) => {
+    try {
+      const response = await fetch(`${getStudentsApiUrl()}/${studentId}/sondagem`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(entry),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (Array.isArray(data.students)) {
+        serverHasStudents.current = true;
+        setStudents(data.students);
+        writeStoredStudents(data.students);
+      }
+    } catch (error) {
+      console.error("Não foi possível salvar a sondagem no servidor:", error);
+    }
+  };
+
   const handleSondagemComplete = (results: boolean[], responses: SondagemResponse[]) => {
     if (!currentStudent) return;
     setSondagemResults(results);
     const entry: SondagemEntry = { date: today(), area: selectedArea, level: getLevelForArea(currentStudent, selectedArea), score: results.filter(Boolean).length, total: results.length, responses };
-    setStudents((prev) => prev.map((s) => s.id !== currentStudent.id ? s : {
+    const nextStudents = students.map((s) => s.id !== currentStudent.id ? s : {
       ...s,
       lastLiteracySondagem: selectedArea === "literacy" ? today() : s.lastLiteracySondagem,
       lastMathSondagem: selectedArea === "math" ? today() : s.lastMathSondagem,
       sondagemHistory: [...s.sondagemHistory, entry],
-    }));
+    });
+    setStudents(nextStudents);
+    writeStoredStudents(nextStudents);
+    void persistSondagem(currentStudent.id, entry);
     setView("sondagem-result");
   };
 
