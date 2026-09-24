@@ -1491,7 +1491,7 @@ function GameScreen({ student, area, activityIndex, onResult, onSkipToNext, onBa
   const pool = getActivities(area, level);
   const activity = pool[activityIndex % pool.length];
   const meta = getMeta(area, level);
-  const hasAudio = student.audioEnabled && area === "literacy" && level <= AUDIO_LITERACY_MAX;
+  const hasAudio = student.audioEnabled && (area === "math" || level <= AUDIO_LITERACY_MAX);
   const missionsDone = area === "literacy" ? student.literacyMissionsDone : student.mathMissionsDone;
 
   const [phase, setPhase] = useState<GamePhase>("playing");
