@@ -40,19 +40,40 @@ function createStudentFromSeed(seed: any, index: number) {
   };
 }
 
-function loadStudents(): any[] {
-  try {
-    const data = JSON.parse(fs.readFileSync(studentsFile, "utf8"));
-    if (Array.isArray(data) && data.length > 0) return data;
-  } catch {
-    // O arquivo persistido ainda não existe: usar o seeder abaixo.
-  }
+function readSeedStudents(): any[] {
   try {
     const seed = JSON.parse(fs.readFileSync(studentsSeedFile, "utf8"));
-    return Array.isArray(seed) ? seed.map(createStudentFromSeed) : [];
+    return Array.isArray(seed) ? seed : [];
   } catch {
     return [];
   }
+}
+
+function mergeSeedStudents(existing: any[]) {
+  const existingNames = new Set(existing.map((student) => String(student.name ?? "").trim().toUpperCase()));
+  let nextId = existing.reduce((max, student) => Math.max(max, Number(student.id) || 0), 0) + 1;
+  const additions = readSeedStudents()
+    .filter((seed) => {
+      const name = String(seed.name ?? "").trim().toUpperCase();
+      return name.length > 0 && !existingNames.has(name);
+    })
+    .map((seed, index) => {
+      const student = createStudentFromSeed(seed, index);
+      student.id = nextId++;
+      existingNames.add(student.name);
+      return student;
+    });
+  return additions.length > 0 ? [...existing, ...additions] : existing;
+}
+
+function loadStudents(): any[] {
+  try {
+    const data = JSON.parse(fs.readFileSync(studentsFile, "utf8"));
+    if (Array.isArray(data) && data.length > 0) return mergeSeedStudents(data);
+  } catch {
+    // O arquivo persistido ainda não existe: carregar a lista inicial abaixo.
+  }
+  return readSeedStudents().map(createStudentFromSeed);
 }
 
 function saveStudents(data: any[]) {
@@ -60,7 +81,7 @@ function saveStudents(data: any[]) {
 }
 
 let students: any[] = loadStudents();
-if (students.length > 0 && !fs.existsSync(studentsFile)) saveStudents(students);
+if (students.length > 0) saveStudents(students);
 
 function getSessionToken(req: express.Request) {
   const cookie = req.headers.cookie ?? "";
