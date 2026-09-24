@@ -2235,6 +2235,9 @@ export default function App() {
   const hasLoadedStudents = useRef(false);
   const serverHasStudents = useRef(false);
   const pendingStudentNames = useRef(new Set<string>());
+  const studentsVersion = useRef(0);
+  const pendingStudentWrites = useRef(0);
+  const refreshController = useRef<AbortController | null>(null);
   const [teacherAuthenticated, setTeacherAuthenticated] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedArea, setSelectedArea] = useState<Area>("literacy");
@@ -2325,30 +2328,49 @@ export default function App() {
     const refreshStudents = async () => {
       if (!teacherAuthenticated) return;
       if (pendingStudentNames.current.size > 0) return;
+      if (pendingStudentWrites.current > 0) return;
+      const requestVersion = studentsVersion.current;
+      refreshController.current?.abort();
+      const controller = new AbortController();
+      refreshController.current = controller;
       try {
-        const response = await fetch(getStudentsApiUrl(), { credentials: "include" });
+        const response = await fetch(getStudentsApiUrl(), { credentials: "include", signal: controller.signal });
         if (!response.ok) return;
         const data = await response.json();
         if (!Array.isArray(data) || data.length === 0) return;
+        if (requestVersion !== studentsVersion.current || pendingStudentWrites.current > 0) return;
         serverHasStudents.current = true;
         if (JSON.stringify(data) !== JSON.stringify(students)) {
           setStudents(data);
           writeStoredStudents(data);
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
         // Keep the current list when the shared server is temporarily offline.
       }
     };
 
     const interval = window.setInterval(refreshStudents, 2000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+      refreshController.current?.abort();
+    };
   }, [students, teacherAuthenticated]);
 
   const currentStudent = selectedId != null ? (students.find((s) => s.id === selectedId) ?? null) : null;
   const currentIdx = activityQueue[queuePos % Math.max(activityQueue.length, 1)] ?? 0;
 
-  const persistStudents = async (nextStudents: Student[]) => {
+  const applyStudents = (nextStudents: Student[]) => {
+    studentsVersion.current += 1;
+    setStudents(nextStudents);
+    writeStoredStudents(nextStudents);
+    void persistStudents(nextStudents, studentsVersion.current);
+  };
+
+  const persistStudents = async (nextStudents: Student[], version: number) => {
     if (!teacherAuthenticated) return;
+    pendingStudentWrites.current += 1;
+    refreshController.current?.abort();
     try {
       const response = await fetch(getStudentsApiUrl(), {
         method: "POST",
@@ -2358,13 +2380,15 @@ export default function App() {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      if (Array.isArray(data.students)) {
+      if (Array.isArray(data.students) && version === studentsVersion.current) {
         serverHasStudents.current = true;
         setStudents(data.students);
         writeStoredStudents(data.students);
       }
     } catch (error) {
       console.error("Não foi possível salvar o progresso dos alunos no servidor:", error);
+    } finally {
+      pendingStudentWrites.current = Math.max(0, pendingStudentWrites.current - 1);
     }
   };
 
@@ -2401,8 +2425,7 @@ export default function App() {
       if (area === "literacy") return { ...s, literacyLevel: newLevel, literacyMissionsDone: 0, literacyStars: Math.min(s.literacyStars + 1, 5) };
       return { ...s, mathLevel: newLevel, mathMissionsDone: 0, mathStars: Math.min(s.mathStars + 1, 5) };
     });
-    setStudents(nextStudents);
-    void persistStudents(nextStudents);
+    applyStudents(nextStudents);
     setNotifications(prev => [
       { id: Date.now(), studentId, studentName: student.name, studentEmoji: student.emoji, area, level: newLevel, levelName: getLevelName(area, newLevel), date: today(), read: false, direction: "up" as const },
       ...prev.filter(n => !(n.studentId === studentId && n.area === area && n.direction === "complete")),
@@ -2420,8 +2443,7 @@ export default function App() {
       if (area === "literacy") return { ...s, literacyLevel: newLevel, literacyMissionsDone: 0, literacyStars: Math.max(s.literacyStars - 1, 0) };
       return { ...s, mathLevel: newLevel, mathMissionsDone: 0, mathStars: Math.max(s.mathStars - 1, 0) };
     });
-    setStudents(nextStudents);
-    void persistStudents(nextStudents);
+    applyStudents(nextStudents);
     setNotifications(prev => [
       { id: Date.now(), studentId, studentName: student.name, studentEmoji: student.emoji, area, level: newLevel, levelName: getLevelName(area, newLevel), date: today(), read: false, direction: "down" as const },
       ...prev.filter(n => !(n.studentId === studentId && n.area === area)),
@@ -2507,8 +2529,7 @@ export default function App() {
         attempts: s.attempts + 1,
         accuracy: Math.min(100, Math.round((s.accuracy * s.attempts + 100) / (s.attempts + 1))),
       });
-      setStudents(nextStudents);
-      void persistStudents(nextStudents);
+      applyStudents(nextStudents);
       if (justCompleted) {
         const level = getLevelForArea(currentStudent, selectedArea);
         setNotifications(prev => [{ id: Date.now(), studentId: currentStudent.id, studentName: currentStudent.name, studentEmoji: currentStudent.emoji, area: selectedArea, level, levelName: getLevelName(selectedArea, level), date: today(), read: false, direction: "complete" as const }, ...prev]);
@@ -2517,8 +2538,7 @@ export default function App() {
     } else {
       setFeedbackMissionsDone(selectedArea === "literacy" ? currentStudent.literacyMissionsDone : currentStudent.mathMissionsDone);
       const nextStudents = students.map((s) => s.id !== currentStudent.id ? s : { ...s, attempts: s.attempts + 1, accuracy: Math.max(0, Math.round((s.accuracy * s.attempts) / (s.attempts + 1))) });
-      setStudents(nextStudents);
-      void persistStudents(nextStudents);
+      applyStudents(nextStudents);
     }
     setView("feedback");
   };
