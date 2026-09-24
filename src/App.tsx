@@ -25,7 +25,8 @@ interface SondagemEntry { date: string; area: Area; level: number; score: number
 interface TeacherNotification {
   id: number; studentId: number; studentName: string; studentEmoji: string;
   area: Area; level: number; levelName: string; date: string; read: boolean;
-  direction?: "up" | "down" | "complete";
+  direction?: "up" | "down" | "complete" | "sondagem";
+  score?: number; total?: number;
 }
 
 interface Student {
@@ -1747,12 +1748,13 @@ function NotificationsPanel({ notifications, onDismiss, onDismissAll, onPromote 
       {notifications.map((n) => {
         const isDown = n.direction === "down";
         const isUp = n.direction === "up";
+        const isSondagem = n.direction === "sondagem";
         const isComplete = n.direction === "complete" || !n.direction;
-        const cardBg = n.read ? "bg-gray-50 border-gray-100" : isDown ? "bg-orange-50 border-orange-200" : isUp ? "bg-emerald-50 border-emerald-200" : "bg-violet-50 border-violet-200";
-        const icon = isDown ? "⬇️" : isUp ? "⬆️" : "🏅";
+        const cardBg = n.read ? "bg-gray-50 border-gray-100" : isSondagem ? "bg-blue-50 border-blue-200" : isDown ? "bg-orange-50 border-orange-200" : isUp ? "bg-emerald-50 border-emerald-200" : "bg-violet-50 border-violet-200";
+        const icon = isSondagem ? "🔍" : isDown ? "⬇️" : isUp ? "⬆️" : "🏅";
         const areaLabel = n.area === "literacy" ? "LEITURA" : "MATEMÁTICA";
-        const actionText = isDown ? `REGREDIDO EM ${areaLabel}` : isUp ? `AVANÇADO EM ${areaLabel}` : `COMPLETOU AS MISSÕES EM ${areaLabel}`;
-        const textColor = isDown ? "text-orange-600" : isUp ? "text-emerald-600" : "text-violet-600";
+        const actionText = isSondagem ? `NOVA SONDAGEM DE ${areaLabel}` : isDown ? `REGREDIDO EM ${areaLabel}` : isUp ? `AVANÇADO EM ${areaLabel}` : `COMPLETOU AS MISSÕES EM ${areaLabel}`;
+        const textColor = isSondagem ? "text-blue-600" : isDown ? "text-orange-600" : isUp ? "text-emerald-600" : "text-violet-600";
         const canAdvance = isComplete && ((n.area === "literacy" && n.level < LITERACY_MAX_LEVEL) || (n.area === "math" && n.level < MATH_MAX_LEVEL));
         return (
           <div key={n.id} className={`rounded-2xl p-4 border-2 flex flex-col gap-2 ${cardBg}`}>
@@ -1766,6 +1768,7 @@ function NotificationsPanel({ notifications, onDismiss, onDismissAll, onPromote 
                 </div>
                 <p className={`text-xs font-bold mt-0.5 ${textColor}`}>{actionText}</p>
                 <p className="text-xs text-gray-400 font-bold">NÍVEL ATUAL: {n.levelName}</p>
+                {isSondagem && <p className="text-xs text-blue-600 font-bold">RESULTADO: {n.score}/{n.total} ({n.total ? Math.round(((n.score ?? 0) / n.total) * 100) : 0}%)</p>}
                 <p className="text-xs text-gray-300 mt-0.5">{n.date}</p>
               </div>
               <button onClick={() => onDismiss(n.id)} className="text-gray-300 hover:text-red-400 text-lg flex-shrink-0 transition-colors">×</button>
@@ -1959,6 +1962,7 @@ function TeacherDashboard({ students, notifications, onSelect, onBack, onLogout,
           const mathM = MATH_META[s.mathLevel];
           const litReady = s.literacyMissionsDone >= MISSIONS_REQUIRED;
           const mathReady = s.mathMissionsDone >= MISSIONS_REQUIRED;
+          const latestSondagem = s.sondagemHistory?.[s.sondagemHistory.length - 1];
           return (
             <div key={s.id}
               className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:border-violet-200 hover:shadow-md transition-all text-left">
@@ -1980,6 +1984,9 @@ function TeacherDashboard({ students, notifications, onSelect, onBack, onLogout,
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${mathM.badge}`}>🔢 {mathM.name}</span>
                       {mathReady && <span className="text-xs font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">✨ PRONTO</span>}
                     </div>
+                  )}
+                  {latestSondagem && (
+                    <p className="text-xs text-blue-600 font-bold mt-1">🔍 ÚLTIMA SONDAGEM: {latestSondagem.area === "literacy" ? "LEITURA" : "MATEMÁTICA"} {latestSondagem.score}/{latestSondagem.total}</p>
                   )}
                 </div>
                 <div className="text-right flex-shrink-0">
@@ -2439,6 +2446,23 @@ export default function App() {
     setStudents(nextStudents);
     writeStoredStudents(nextStudents);
     void persistSondagem(currentStudent.id, entry);
+    setNotifications((prev) => [
+      {
+        id: Date.now(),
+        studentId: currentStudent.id,
+        studentName: currentStudent.name,
+        studentEmoji: currentStudent.emoji,
+        area: selectedArea,
+        level: entry.level,
+        levelName: getLevelName(selectedArea, entry.level),
+        date: entry.date,
+        read: false,
+        direction: "sondagem" as const,
+        score: entry.score,
+        total: entry.total,
+      },
+      ...prev,
+    ]);
     setView("sondagem-result");
   };
 
