@@ -17,11 +17,39 @@ app.use(express.json());
 app.use(express.static(path.join(projectRoot, "dist")));
 
 const studentsFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "students.json");
+const studentsSeedFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "students.seed.json");
+
+function createStudentFromSeed(seed: any, index: number) {
+  return {
+    id: Number(seed.id) || index + 1,
+    name: String(seed.name ?? "").trim().toUpperCase(),
+    emoji: typeof seed.emoji === "string" && seed.emoji ? seed.emoji : "⭐",
+    literacyLevel: 1,
+    literacyStars: 0,
+    literacyMissionsDone: 0,
+    lastLiteracySondagem: null,
+    mathLevel: 1,
+    mathStars: 0,
+    mathMissionsDone: 0,
+    lastMathSondagem: null,
+    sondagemHistory: [],
+    skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0 },
+    attempts: 0,
+    accuracy: 0,
+    audioEnabled: true,
+  };
+}
 
 function loadStudents(): any[] {
   try {
     const data = JSON.parse(fs.readFileSync(studentsFile, "utf8"));
-    return Array.isArray(data) ? data : [];
+    if (Array.isArray(data) && data.length > 0) return data;
+  } catch {
+    // O arquivo persistido ainda não existe: usar o seeder abaixo.
+  }
+  try {
+    const seed = JSON.parse(fs.readFileSync(studentsSeedFile, "utf8"));
+    return Array.isArray(seed) ? seed.map(createStudentFromSeed) : [];
   } catch {
     return [];
   }
@@ -32,6 +60,7 @@ function saveStudents(data: any[]) {
 }
 
 let students: any[] = loadStudents();
+if (students.length > 0 && !fs.existsSync(studentsFile)) saveStudents(students);
 
 function getSessionToken(req: express.Request) {
   const cookie = req.headers.cookie ?? "";
