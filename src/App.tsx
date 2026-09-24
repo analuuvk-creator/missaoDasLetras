@@ -2323,6 +2323,7 @@ export default function App() {
 
   useEffect(() => {
     const refreshStudents = async () => {
+      if (!teacherAuthenticated) return;
       if (pendingStudentNames.current.size > 0) return;
       try {
         const response = await fetch(getStudentsApiUrl(), { credentials: "include" });
@@ -2341,10 +2342,31 @@ export default function App() {
 
     const interval = window.setInterval(refreshStudents, 2000);
     return () => window.clearInterval(interval);
-  }, [students]);
+  }, [students, teacherAuthenticated]);
 
   const currentStudent = selectedId != null ? (students.find((s) => s.id === selectedId) ?? null) : null;
   const currentIdx = activityQueue[queuePos % Math.max(activityQueue.length, 1)] ?? 0;
+
+  const persistStudents = async (nextStudents: Student[]) => {
+    if (!teacherAuthenticated) return;
+    try {
+      const response = await fetch(getStudentsApiUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(nextStudents),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (Array.isArray(data.students)) {
+        serverHasStudents.current = true;
+        setStudents(data.students);
+        writeStoredStudents(data.students);
+      }
+    } catch (error) {
+      console.error("Não foi possível salvar o progresso dos alunos no servidor:", error);
+    }
+  };
 
   const startGame = (area: Area, student: Student) => {
     const pool = getActivities(area, getLevelForArea(student, area));
@@ -2374,11 +2396,13 @@ export default function App() {
     if (!student) return;
     const currentLevel = area === "literacy" ? student.literacyLevel : student.mathLevel;
     const newLevel = area === "literacy" ? Math.min(currentLevel + 1, LITERACY_MAX_LEVEL) : Math.min(currentLevel + 1, MATH_MAX_LEVEL);
-    setStudents((prev) => prev.map((s) => {
+    const nextStudents = students.map((s) => {
       if (s.id !== studentId) return s;
       if (area === "literacy") return { ...s, literacyLevel: newLevel, literacyMissionsDone: 0, literacyStars: Math.min(s.literacyStars + 1, 5) };
       return { ...s, mathLevel: newLevel, mathMissionsDone: 0, mathStars: Math.min(s.mathStars + 1, 5) };
-    }));
+    });
+    setStudents(nextStudents);
+    void persistStudents(nextStudents);
     setNotifications(prev => [
       { id: Date.now(), studentId, studentName: student.name, studentEmoji: student.emoji, area, level: newLevel, levelName: getLevelName(area, newLevel), date: today(), read: false, direction: "up" as const },
       ...prev.filter(n => !(n.studentId === studentId && n.area === area && n.direction === "complete")),
@@ -2391,11 +2415,13 @@ export default function App() {
     const currentLevel = area === "literacy" ? student.literacyLevel : student.mathLevel;
     if (currentLevel <= 1) return;
     const newLevel = currentLevel - 1;
-    setStudents((prev) => prev.map((s) => {
+    const nextStudents = students.map((s) => {
       if (s.id !== studentId) return s;
       if (area === "literacy") return { ...s, literacyLevel: newLevel, literacyMissionsDone: 0, literacyStars: Math.max(s.literacyStars - 1, 0) };
       return { ...s, mathLevel: newLevel, mathMissionsDone: 0, mathStars: Math.max(s.mathStars - 1, 0) };
-    }));
+    });
+    setStudents(nextStudents);
+    void persistStudents(nextStudents);
     setNotifications(prev => [
       { id: Date.now(), studentId, studentName: student.name, studentEmoji: student.emoji, area, level: newLevel, levelName: getLevelName(area, newLevel), date: today(), read: false, direction: "down" as const },
       ...prev.filter(n => !(n.studentId === studentId && n.area === area)),
@@ -2472,7 +2498,7 @@ export default function App() {
       const newDone = Math.min(curDone + 1, MISSIONS_REQUIRED);
       setFeedbackMissionsDone(newDone);
       const justCompleted = newDone >= MISSIONS_REQUIRED && curDone < MISSIONS_REQUIRED;
-      setStudents((prev) => prev.map((s) => s.id !== currentStudent.id ? s : {
+      const nextStudents = students.map((s) => s.id !== currentStudent.id ? s : {
         ...s,
         literacyMissionsDone: isLit ? newDone : s.literacyMissionsDone,
         literacyStars: isLit && newDone >= MISSIONS_REQUIRED && s.literacyStars < 5 ? Math.min(s.literacyStars+1,5) : s.literacyStars,
@@ -2480,7 +2506,9 @@ export default function App() {
         mathStars: !isLit && newDone >= MISSIONS_REQUIRED && s.mathStars < 5 ? Math.min(s.mathStars+1,5) : s.mathStars,
         attempts: s.attempts + 1,
         accuracy: Math.min(100, Math.round((s.accuracy * s.attempts + 100) / (s.attempts + 1))),
-      }));
+      });
+      setStudents(nextStudents);
+      void persistStudents(nextStudents);
       if (justCompleted) {
         const level = getLevelForArea(currentStudent, selectedArea);
         setNotifications(prev => [{ id: Date.now(), studentId: currentStudent.id, studentName: currentStudent.name, studentEmoji: currentStudent.emoji, area: selectedArea, level, levelName: getLevelName(selectedArea, level), date: today(), read: false, direction: "complete" as const }, ...prev]);
@@ -2488,7 +2516,9 @@ export default function App() {
       setQueuePos((p) => p + 1);
     } else {
       setFeedbackMissionsDone(selectedArea === "literacy" ? currentStudent.literacyMissionsDone : currentStudent.mathMissionsDone);
-      setStudents((prev) => prev.map((s) => s.id !== currentStudent.id ? s : { ...s, attempts: s.attempts + 1, accuracy: Math.max(0, Math.round((s.accuracy * s.attempts) / (s.attempts + 1))) }));
+      const nextStudents = students.map((s) => s.id !== currentStudent.id ? s : { ...s, attempts: s.attempts + 1, accuracy: Math.max(0, Math.round((s.accuracy * s.attempts) / (s.attempts + 1))) });
+      setStudents(nextStudents);
+      void persistStudents(nextStudents);
     }
     setView("feedback");
   };
