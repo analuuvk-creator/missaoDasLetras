@@ -1883,7 +1883,7 @@ function TeacherDashboard({ students, notifications, onSelect, onBack, onLogout,
   onPromoteFromNotification: (studentId: number, area: Area, notifId: number) => void;
   onAddStudent: (name: string, emoji: string) => void;
 }) {
-  const [filter, setFilter] = useState<"all"|"literacy"|"math">("all");
+  const [filter, setFilter] = useState<"all"|"literacy"|"math"|"sondagem">("all");
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -1948,16 +1948,41 @@ function TeacherDashboard({ students, notifications, onSelect, onBack, onLogout,
         </div>
       )}
       <div className="flex gap-2 p-4">
-        {(["all","literacy","math"] as const).map((f) => (
+        {(["all","literacy","math","sondagem"] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)}
             className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${filter===f?"bg-violet-600 text-white shadow-md":"bg-white text-gray-500 border border-gray-200"}`}
             style={{ fontFamily:"Fredoka,sans-serif" }}>
-            {f==="all"?"TODOS":f==="literacy"?"📚 LEITURA":"🔢 MATEMÁTICA"}
+            {f==="all"?"TODOS":f==="literacy"?"📚 LEITURA":f==="math"?"🔢 MATEMÁTICA":"🔍 SONDAGENS"}
           </button>
         ))}
       </div>
       <div className="px-4 pb-8 space-y-3">
-        {students.map((s) => {
+        {filter === "sondagem" ? students.filter((s) => s.sondagemHistory?.length > 0).map((s) => {
+          const entry = s.sondagemHistory[s.sondagemHistory.length - 1];
+          const suggestion = generateSondagemSuggestion(entry);
+          const pct = entry.total > 0 ? Math.round((entry.score / entry.total) * 100) : 0;
+          return (
+            <div key={s.id} className="w-full bg-white rounded-2xl p-4 shadow-sm border border-blue-100">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl border-2 border-blue-100 bg-blue-50">{s.emoji}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-800 text-lg" style={{ fontFamily:"Fredoka,sans-serif" }}>{s.name}</p>
+                  <p className="text-xs text-gray-400 font-bold">{entry.area === "literacy" ? "📚 LEITURA" : "🔢 MATEMÁTICA"} · NÍVEL {entry.level} · {entry.date}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xl font-bold text-blue-700" style={{ fontFamily:"Fredoka,sans-serif" }}>{entry.score}/{entry.total}</p>
+                  <p className="text-xs text-gray-400 font-bold">{pct}%</p>
+                </div>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-3"><div className="h-full rounded-full" style={{ width:`${pct}%`, background: pct >= 80 ? "#34d399" : pct >= 50 ? "#818cf8" : "#f87171" }} /></div>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-600 mb-1">FEEDBACK PEDAGÓGICO</p>
+                <p className="text-sm font-semibold text-blue-900">{suggestion.icon} {suggestion.text}</p>
+              </div>
+              <button onClick={() => onSelect(s)} className="w-full mt-3 py-2 rounded-xl border-2 border-blue-100 text-blue-600 text-xs font-bold hover:bg-blue-50 transition-all" style={{ fontFamily:"Fredoka,sans-serif" }}>VER DETALHAMENTO COMPLETO</button>
+            </div>
+          );
+        }) : students.map((s) => {
           const litM = LIT_META[s.literacyLevel];
           const mathM = MATH_META[s.mathLevel];
           const litReady = s.literacyMissionsDone >= MISSIONS_REQUIRED;
