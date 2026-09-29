@@ -1870,7 +1870,8 @@ function TeacherLogin({ onSuccess, onBack }: { onSuccess: () => void; onBack: ()
         <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-violet-400 outline-none" placeholder="Digite sua senha" />
         {error && <p className="text-red-500 text-sm font-bold mt-3">{error}</p>}
         <button disabled={loading || !username || !password} className="w-full mt-5 py-3 rounded-xl bg-violet-600 text-white font-bold hover:bg-violet-700 disabled:opacity-50 transition-all" style={{ fontFamily:"Fredoka,sans-serif" }}>{loading ? "ENTRANDO..." : "ENTRAR NO PAINEL"}</button>
-        <p className="text-xs text-gray-400 text-center mt-4">As credenciais podem ser alteradas pelas variáveis TEACHER_USERNAME e TEACHER_PASSWORD no servidor.</p>
+        <p className="text-xs text-gray-400 text-center mt-4">USUÁRIO: professor</p>
+        <p className="text-xs text-gray-400 text-center mt-4">SENHA: missao2026</p>
       </form>
     </div>
   );
