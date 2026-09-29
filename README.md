@@ -31,7 +31,7 @@ Missao-das-Letras/
 git clone https://github.com/analuuvk-creator/missaoDasLetras.git
 ```
 ```
-cd Missao-das-Letras
+cd missaoDasLetras
 ```
 ```
 npm install
