@@ -57,6 +57,7 @@ function mergeSeedStudents(existing: any[]) {
     sondagemHistory: Array.isArray(student.sondagemHistory) ? student.sondagemHistory : [],
     lastLiteracySondagem: student.lastLiteracySondagem ?? null,
     lastMathSondagem: student.lastMathSondagem ?? null,
+    skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0, ...(student.skills ?? {}) },
   }));
   const additions = readSeedStudents()
     .filter((seed) => {
@@ -103,6 +104,11 @@ function requireTeacher(req: express.Request, res: express.Response, next: expre
   next();
 }
 
+function clamp(value: unknown, min: number, max: number, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, Math.round(number))) : fallback;
+}
+
 app.get("/api/status", (_req, res) => {
   res.json({ ok: true, message: "Servidor funcionando!" });
 });
@@ -132,6 +138,47 @@ app.get("/api/teacher/session", requireTeacher, (_req, res) => {
 
 app.get("/api/students", (_req, res) => {
   res.json(students);
+});
+
+// A criança não precisa autenticar como professora para guardar uma atividade.
+// Apenas campos de progresso são aceitos; identidade e histórico continuam protegidos.
+app.post("/api/students/:id/progress", (req, res) => {
+  const studentId = Number(req.params.id);
+  const studentIndex = students.findIndex((student) => Number(student.id) === studentId);
+  const progress = req.body?.progress;
+  if (studentIndex < 0) {
+    res.status(404).json({ ok: false, message: "Aluno não encontrado." });
+    return;
+  }
+  if (!progress || typeof progress !== "object") {
+    res.status(400).json({ ok: false, message: "Dados inválidos de progresso." });
+    return;
+  }
+
+  const current = students[studentIndex];
+  const incomingSkills = progress.skills && typeof progress.skills === "object" ? progress.skills : {};
+  const skills = {
+    letras: clamp(incomingSkills.letras, 0, 100, current.skills?.letras ?? 0),
+    silabas: clamp(incomingSkills.silabas, 0, 100, current.skills?.silabas ?? 0),
+    sons: clamp(incomingSkills.sons, 0, 100, current.skills?.sons ?? 0),
+    palavras: clamp(incomingSkills.palavras, 0, 100, current.skills?.palavras ?? 0),
+    escrita: clamp(incomingSkills.escrita, 0, 100, current.skills?.escrita ?? 0),
+  };
+  students[studentIndex] = {
+    ...current,
+    literacyLevel: clamp(progress.literacyLevel, 1, 9, current.literacyLevel),
+    literacyStars: clamp(progress.literacyStars, 0, 5, current.literacyStars),
+    literacyMissionsDone: clamp(progress.literacyMissionsDone, 0, 5, current.literacyMissionsDone),
+    mathLevel: clamp(progress.mathLevel, 1, 8, current.mathLevel),
+    mathStars: clamp(progress.mathStars, 0, 5, current.mathStars),
+    mathMissionsDone: clamp(progress.mathMissionsDone, 0, 5, current.mathMissionsDone),
+    attempts: Math.max(current.attempts ?? 0, clamp(progress.attempts, 0, 1000000, current.attempts ?? 0)),
+    accuracy: clamp(progress.accuracy, 0, 100, current.accuracy),
+    audioEnabled: typeof progress.audioEnabled === "boolean" ? progress.audioEnabled : current.audioEnabled,
+    skills,
+  };
+  saveStudents(students);
+  res.json({ ok: true, student: students[studentIndex], students });
 });
 
 app.post("/api/students/:id/sondagem", (req, res) => {

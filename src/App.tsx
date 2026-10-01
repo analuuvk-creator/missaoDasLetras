@@ -576,6 +576,29 @@ function getLevelForArea(s: Student, area: Area) { return area === "literacy" ? 
 function getActivities(area: Area, level: number): Activity[] {
   return area === "literacy" ? (LITERACY_ACTIVITIES[level] ?? LITERACY_ACTIVITIES[6]) : (MATH_ACTIVITIES[level] ?? MATH_ACTIVITIES[5]);
 }
+
+function getSkillForActivity(tag: string): keyof Student["skills"] {
+  if (["LETRA", "NÚMERO", "ORDEM", "SEQUÊNCIA"].includes(tag)) return "letras";
+  if (["SÍLABA", "RIMA"].includes(tag)) return "silabas";
+  if (["SOM", "LHNH"].includes(tag)) return "sons";
+  if (["PALAVRA", "IMAGEM", "PLURAL", "SINÔNIMO", "ANTÔNIMO", "LEITURA"].includes(tag)) return "palavras";
+  return "escrita";
+}
+
+function updateActivityProgress(student: Student, area: Area, tag: string, correct: boolean): Student {
+  if (area !== "literacy") return student;
+  const skill = getSkillForActivity(tag);
+  const currentSkills = {
+    letras: student.skills?.letras ?? 0,
+    silabas: student.skills?.silabas ?? 0,
+    sons: student.skills?.sons ?? 0,
+    palavras: student.skills?.palavras ?? 0,
+    escrita: student.skills?.escrita ?? 0,
+  };
+  const increment = correct ? 8 : 3;
+  return { ...student, skills: { ...currentSkills, [skill]: Math.min(100, currentSkills[skill] + increment) } };
+}
+
 function getSondagem(area: Area, level: number): Activity[] {
   return area === "literacy" ? (LITERACY_SONDAGEM[level] ?? LITERACY_SONDAGEM[1]) : (MATH_SONDAGEM[level] ?? MATH_SONDAGEM[1]);
 }
@@ -1486,7 +1509,7 @@ function AlphabetScreen({ onBack }: { onBack: () => void }) {
 
 function GameScreen({ student, area, activityIndex, onResult, onSkipToNext, onBack }: {
   student: Student; area: Area; activityIndex: number;
-  onResult: (correct: boolean, usedHint: boolean) => void; onSkipToNext: () => void; onBack: () => void;
+  onResult: (correct: boolean, usedHint: boolean, tag: string) => void; onSkipToNext: (tag?: string) => void; onBack: () => void;
 }) {
   const level = getLevelForArea(student, area);
   const pool = getActivities(area, level);
@@ -1522,14 +1545,14 @@ function GameScreen({ student, area, activityIndex, onResult, onSkipToNext, onBa
   const handleChoice = (opt: Option) => {
     if (selected || phase === "revealed") return;
     setSelected(opt.value);
-    if (opt.correct) { if (hasAudio) speak("Muito bem! Você acertou!"); setTimeout(() => onResult(true, hintLevel > 0), 650); }
+    if (opt.correct) { if (hasAudio) speak("Muito bem! Você acertou!"); setTimeout(() => onResult(true, hintLevel > 0, activity.tag), 650); }
     else handleWrong();
   };
 
   const handleWrite = () => {
     const input = writeVal.trim().toUpperCase();
     const correct = (activity.answers ?? []).some((a) => a.toUpperCase() === input);
-    if (correct) { if (hasAudio) speak("Incrível! Você escreveu certo!"); onResult(true, hintLevel > 0); }
+    if (correct) { if (hasAudio) speak("Incrível! Você escreveu certo!"); onResult(true, hintLevel > 0, activity.tag); }
     else { handleWrong(); if (phase !== "revealed") setWriteVal(""); }
   };
 
@@ -1577,7 +1600,7 @@ function GameScreen({ student, area, activityIndex, onResult, onSkipToNext, onBa
               </div>
             )}
             {phase === "revealed" ? (
-              <RevealCard activity={activity} onNext={() => { stopSpeech(); onSkipToNext(); }} />
+              <RevealCard activity={activity} onNext={() => { stopSpeech(); onSkipToNext(activity.tag); }} />
             ) : (
               <>
                 <div className="flex items-start gap-2 mb-3">
@@ -2397,11 +2420,36 @@ export default function App() {
   const currentStudent = selectedId != null ? (students.find((s) => s.id === selectedId) ?? null) : null;
   const currentIdx = activityQueue[queuePos % Math.max(activityQueue.length, 1)] ?? 0;
 
-  const applyStudents = (nextStudents: Student[]) => {
+  const applyStudents = (nextStudents: Student[], persistProgress = false) => {
     studentsVersion.current += 1;
     setStudents(nextStudents);
     writeStoredStudents(nextStudents);
-    void persistStudents(nextStudents, studentsVersion.current);
+    if (persistProgress) {
+      const changedStudent = nextStudents.find((student) => student.id === selectedId);
+      if (changedStudent) void persistStudentProgress(changedStudent);
+    } else {
+      void persistStudents(nextStudents, studentsVersion.current);
+    }
+  };
+
+  const persistStudentProgress = async (student: Student) => {
+    try {
+      const response = await fetch(`${getStudentsApiUrl()}/${student.id}/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ progress: student }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (Array.isArray(data.students)) {
+        serverHasStudents.current = true;
+        setStudents((current) => current.map((item) => item.id === student.id ? (data.student ?? item) : item));
+        writeStoredStudents(data.students);
+      }
+    } catch (error) {
+      console.error("Não foi possível salvar o progresso da atividade no servidor; ele continua salvo neste dispositivo:", error);
+    }
   };
 
   const persistStudents = async (nextStudents: Student[], version: number) => {
@@ -2592,10 +2640,11 @@ export default function App() {
     setView("avatar");
   };
   const handleToggleAudio = (studentId: number) => {
-    setStudents(prev => prev.map(s => s.id === studentId ? { ...s, audioEnabled: !s.audioEnabled } : s));
+    const nextStudents = students.map(s => s.id === studentId ? { ...s, audioEnabled: !s.audioEnabled } : s);
+    applyStudents(nextStudents);
   };
 
-  const handleGameResult = (correct: boolean, _usedHint: boolean) => {
+  const handleGameResult = (correct: boolean, _usedHint: boolean, activityTag: string) => {
     if (!currentStudent) return;
     setFeedbackCorrect(correct);
     if (correct) {
@@ -2606,6 +2655,7 @@ export default function App() {
       const justCompleted = newDone >= MISSIONS_REQUIRED && curDone < MISSIONS_REQUIRED;
       const nextStudents = students.map((s) => s.id !== currentStudent.id ? s : {
         ...s,
+        ...updateActivityProgress(s, selectedArea, activityTag, correct),
         literacyMissionsDone: isLit ? newDone : s.literacyMissionsDone,
         literacyStars: isLit && newDone >= MISSIONS_REQUIRED && s.literacyStars < 5 ? Math.min(s.literacyStars+1,5) : s.literacyStars,
         mathMissionsDone: !isLit ? newDone : s.mathMissionsDone,
@@ -2613,7 +2663,7 @@ export default function App() {
         attempts: s.attempts + 1,
         accuracy: Math.min(100, Math.round((s.accuracy * s.attempts + 100) / (s.attempts + 1))),
       });
-      applyStudents(nextStudents);
+      applyStudents(nextStudents, true);
       if (justCompleted) {
         const level = getLevelForArea(currentStudent, selectedArea);
         setNotifications(prev => [{ id: Date.now(), studentId: currentStudent.id, studentName: currentStudent.name, studentEmoji: currentStudent.emoji, area: selectedArea, level, levelName: getLevelName(selectedArea, level), date: today(), read: false, direction: "complete" as const }, ...prev]);
@@ -2621,15 +2671,23 @@ export default function App() {
       setQueuePos((p) => p + 1);
     } else {
       setFeedbackMissionsDone(selectedArea === "literacy" ? currentStudent.literacyMissionsDone : currentStudent.mathMissionsDone);
-      const nextStudents = students.map((s) => s.id !== currentStudent.id ? s : { ...s, attempts: s.attempts + 1, accuracy: Math.max(0, Math.round((s.accuracy * s.attempts) / (s.attempts + 1))) });
-      applyStudents(nextStudents);
+      const nextStudents = students.map((s) => s.id !== currentStudent.id ? s : {
+        ...updateActivityProgress(s, selectedArea, activityTag, false),
+        attempts: s.attempts + 1,
+        accuracy: Math.max(0, Math.round((s.accuracy * s.attempts) / (s.attempts + 1))),
+      });
+      applyStudents(nextStudents, true);
     }
     setView("feedback");
   };
 
-  const handleSkipToNext = () => {
+  const handleSkipToNext = (activityTag?: string) => {
     if (!currentStudent) return;
-    setStudents((prev) => prev.map((s) => s.id === currentStudent.id ? { ...s, attempts: s.attempts + 1 } : s));
+    const nextStudents = students.map((s) => s.id === currentStudent.id ? {
+      ...updateActivityProgress(s, selectedArea, activityTag ?? "LEITURA", false),
+      attempts: s.attempts + 1,
+    } : s);
+    applyStudents(nextStudents, true);
     setQueuePos((p) => p + 1); setGameKey((k) => k + 1); setView("game");
   };
 
