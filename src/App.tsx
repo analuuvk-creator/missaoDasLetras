@@ -34,7 +34,7 @@ interface Student {
   literacyLevel: number; literacyStars: number; literacyMissionsDone: number; lastLiteracySondagem: string | null;
   mathLevel: number; mathStars: number; mathMissionsDone: number; lastMathSondagem: string | null;
   sondagemHistory: SondagemEntry[];
-  skills: { letras: number; silabas: number; sons: number; palavras: number; escrita: number };
+  skills: { letras: number; silabas: number; sons: number; palavras: number; escrita: number; numeros: number };
   attempts: number; accuracy: number;
   audioEnabled: boolean;
 }
@@ -527,12 +527,12 @@ const MATH_SONDAGEM: Record<number, Activity[]> = {
 // ════════════════════════════════════════════════════════════════
 
 const initialStudents: Student[] = [
-  { id:1, name:"ANA",   emoji:"🦋", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:30,silabas:20,sons:15,palavras:20,escrita:10}, attempts:0, accuracy:0, audioEnabled:true },
-  { id:2, name:"JOÃO",  emoji:"🐯", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:25,silabas:15,sons:20,palavras:15,escrita:10}, attempts:0, accuracy:0, audioEnabled:true },
-  { id:3, name:"MARIA", emoji:"🐸", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:20,silabas:15,sons:10,palavras:15,escrita:5},  attempts:0, accuracy:0, audioEnabled:true },
-  { id:4, name:"PEDRO", emoji:"🦁", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:35,silabas:25,sons:20,palavras:25,escrita:15}, attempts:0, accuracy:0, audioEnabled:true },
-  { id:5, name:"SOFIA", emoji:"🦄", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:20,silabas:10,sons:10,palavras:10,escrita:5},  attempts:0, accuracy:0, audioEnabled:true },
-  { id:6, name:"LUCAS", emoji:"🚀", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:30,silabas:20,sons:15,palavras:20,escrita:10}, attempts:0, accuracy:0, audioEnabled:true },
+  { id:1, name:"ANA",   emoji:"🦋", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:30,silabas:20,sons:15,palavras:20,escrita:10,numeros:0}, attempts:0, accuracy:0, audioEnabled:true },
+  { id:2, name:"JOÃO",  emoji:"🐯", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:25,silabas:15,sons:20,palavras:15,escrita:10,numeros:0}, attempts:0, accuracy:0, audioEnabled:true },
+  { id:3, name:"MARIA", emoji:"🐸", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:20,silabas:15,sons:10,palavras:15,escrita:5,numeros:0},  attempts:0, accuracy:0, audioEnabled:true },
+  { id:4, name:"PEDRO", emoji:"🦁", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:35,silabas:25,sons:20,palavras:25,escrita:15,numeros:0}, attempts:0, accuracy:0, audioEnabled:true },
+  { id:5, name:"SOFIA", emoji:"🦄", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:20,silabas:10,sons:10,palavras:10,escrita:5,numeros:0},  attempts:0, accuracy:0, audioEnabled:true },
+  { id:6, name:"LUCAS", emoji:"🚀", literacyLevel:1, literacyStars:0, literacyMissionsDone:0, lastLiteracySondagem:null, mathLevel:1, mathStars:0, mathMissionsDone:0, lastMathSondagem:null, sondagemHistory:[], skills:{letras:30,silabas:20,sons:15,palavras:20,escrita:10,numeros:0}, attempts:0, accuracy:0, audioEnabled:true },
 ];
 
 const STUDENTS_STORAGE_KEY = "missao-das-letras:students";
@@ -577,8 +577,9 @@ function getActivities(area: Area, level: number): Activity[] {
   return area === "literacy" ? (LITERACY_ACTIVITIES[level] ?? LITERACY_ACTIVITIES[6]) : (MATH_ACTIVITIES[level] ?? MATH_ACTIVITIES[5]);
 }
 
-function getSkillForActivity(tag: string): keyof Student["skills"] {
-  if (["LETRA", "NÚMERO", "ORDEM", "SEQUÊNCIA"].includes(tag)) return "letras";
+function getSkillForActivity(area: Area, tag: string): keyof Student["skills"] {
+  if (area === "math" || tag === "NÚMERO") return "numeros";
+  if (["LETRA", "ORDEM", "SEQUÊNCIA"].includes(tag)) return "letras";
   if (["SÍLABA", "RIMA"].includes(tag)) return "silabas";
   if (["SOM", "LHNH"].includes(tag)) return "sons";
   if (["PALAVRA", "IMAGEM", "PLURAL", "SINÔNIMO", "ANTÔNIMO", "LEITURA"].includes(tag)) return "palavras";
@@ -587,13 +588,14 @@ function getSkillForActivity(tag: string): keyof Student["skills"] {
 
 function updateActivityProgress(student: Student, area: Area, tag: string, correct: boolean): Student {
   if (area !== "literacy") return student;
-  const skill = getSkillForActivity(tag);
+  const skill = getSkillForActivity(area, tag);
   const currentSkills = {
     letras: student.skills?.letras ?? 0,
     silabas: student.skills?.silabas ?? 0,
     sons: student.skills?.sons ?? 0,
     palavras: student.skills?.palavras ?? 0,
     escrita: student.skills?.escrita ?? 0,
+    numeros: student.skills?.numeros ?? 0,
   };
   const increment = correct ? 8 : 3;
   return { ...student, skills: { ...currentSkills, [skill]: Math.min(100, currentSkills[skill] + increment) } };
@@ -2202,6 +2204,9 @@ function StudentProfile({ student, onBack, onPromote, onDemote, onToggleAudio }:
                 </div>
               ))}
             </div>
+            <div className="mt-4">
+              <SkillBar label="NÚMEROS" value={student.skills.numeros ?? 0} />
+            </div>
           </div>
         )}
         {tab === "sondagem" && (
@@ -2594,7 +2599,7 @@ export default function App() {
       literacyLevel: 1, literacyStars: 0, literacyMissionsDone: 0, lastLiteracySondagem: null,
       mathLevel: 1, mathStars: 0, mathMissionsDone: 0, lastMathSondagem: null,
       sondagemHistory: [],
-      skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0 },
+      skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0, numeros: 0 },
       attempts: 0, accuracy: 0, audioEnabled: true,
     };
 

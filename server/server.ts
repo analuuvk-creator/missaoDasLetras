@@ -33,7 +33,7 @@ function createStudentFromSeed(seed: any, index: number) {
     mathMissionsDone: 0,
     lastMathSondagem: null,
     sondagemHistory: [],
-    skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0 },
+    skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0, numeros: 0 },
     attempts: 0,
     accuracy: 0,
     audioEnabled: true,
@@ -57,7 +57,7 @@ function mergeSeedStudents(existing: any[]) {
     sondagemHistory: Array.isArray(student.sondagemHistory) ? student.sondagemHistory : [],
     lastLiteracySondagem: student.lastLiteracySondagem ?? null,
     lastMathSondagem: student.lastMathSondagem ?? null,
-    skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0, ...(student.skills ?? {}) },
+    skills: { letras: 0, silabas: 0, sons: 0, palavras: 0, escrita: 0, numeros: 0, ...(student.skills ?? {}) },
   }));
   const additions = readSeedStudents()
     .filter((seed) => {
@@ -163,6 +163,7 @@ app.post("/api/students/:id/progress", (req, res) => {
     sons: clamp(incomingSkills.sons, 0, 100, current.skills?.sons ?? 0),
     palavras: clamp(incomingSkills.palavras, 0, 100, current.skills?.palavras ?? 0),
     escrita: clamp(incomingSkills.escrita, 0, 100, current.skills?.escrita ?? 0),
+    numeros: clamp(incomingSkills.numeros, 0, 100, current.skills?.numeros ?? 0),
   };
   students[studentIndex] = {
     ...current,
